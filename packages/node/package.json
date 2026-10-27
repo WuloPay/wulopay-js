@@ -1,0 +1,21 @@
+{
+  "name": "@wulopay/node",
+  "version": "1.0.0",
+  "description": "WuloPay server library for Node.js: hosted checkout sessions, refunds and signed webhooks.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "engines": { "node": ">=22.12" },
+  "keywords": ["wulopay", "payments", "checkout", "webhooks", "south africa"],
+  "repository": { "type": "git", "url": "git+https://github.com/WuloPay/wulopay-js.git", "directory": "packages/node" },
+  "homepage": "https://github.com/WuloPay/wulopay-js/tree/main/packages/node",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": { "@types/node": "^22.19.0" }
+}
