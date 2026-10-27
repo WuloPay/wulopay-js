@@ -1,0 +1,17 @@
+{
+  "name": "wulopay-js",
+  "private": true,
+  "description": "WuloPay JavaScript packages: Node server library, React, React Native and Capacitor.",
+  "license": "MIT",
+  "workspaces": ["packages/*"],
+  "engines": { "node": ">=22.12" },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.12"
+  }
+}

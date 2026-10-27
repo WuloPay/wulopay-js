@@ -1,0 +1,26 @@
+name: Publish to npm
+
+# Runs when a GitHub release is published. Needs the @wulopay organisation on npm and an automation token in the
+# repository secret NPM_TOKEN. Packages are published with provenance (signed build attestation).
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm ci
+      - run: npm run typecheck && npm test && npm run build
+      - run: npm publish --workspaces --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
