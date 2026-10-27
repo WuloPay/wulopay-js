@@ -2,12 +2,15 @@
 
 Take card payments on WuloPay's secure payment page from Node.js, React, React Native and Capacitor apps.
 
-| Package | Use it in | What it does |
-|---|---|---|
-| [`@wulopay/node`](packages/node) | Your server (Node.js 22.12+) | Create checkout sessions, refunds, verify webhooks |
-| [`@wulopay/react`](packages/react) | React web apps (18+) | A "Pay" button / hook that asks your server for a session and redirects |
-| [`@wulopay/react-native`](packages/react-native) | React Native / Expo apps | Open checkout in the system browser sheet, get the result by deep link |
-| [`@wulopay/capacitor`](packages/capacitor) | Capacitor 8 / Ionic apps | The same, with the Capacitor Browser and App plugins |
+| Package | npm | Install | Use it in |
+|---|---|---|---|
+| [`@wulopay/node`](packages/node) | [![npm](https://img.shields.io/npm/v/@wulopay/node)](https://www.npmjs.com/package/@wulopay/node) | `npm install @wulopay/node` | Your server (Node.js 22.12+): sessions, refunds, webhooks |
+| [`@wulopay/react`](packages/react) | [![npm](https://img.shields.io/npm/v/@wulopay/react)](https://www.npmjs.com/package/@wulopay/react) | `npm install @wulopay/react` | React web apps (18+): a "Pay" button / hook |
+| [`@wulopay/react-native`](packages/react-native) | [![npm](https://img.shields.io/npm/v/@wulopay/react-native)](https://www.npmjs.com/package/@wulopay/react-native) | `npm install @wulopay/react-native` | React Native / Expo apps |
+| [`@wulopay/capacitor`](packages/capacitor) | [![npm](https://img.shields.io/npm/v/@wulopay/capacitor)](https://www.npmjs.com/package/@wulopay/capacitor) | `npm install @wulopay/capacitor` | Capacitor 8 / Ionic apps |
+
+All packages are published with [npm provenance](https://docs.npmjs.com/generating-provenance-statements): check with
+`npm audit signatures`.
 
 ## How it fits together
 
