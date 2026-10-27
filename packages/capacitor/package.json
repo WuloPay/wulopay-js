@@ -1,0 +1,22 @@
+{
+  "name": "@wulopay/capacitor",
+  "version": "1.0.0",
+  "description": "Open WuloPay hosted checkout from a Capacitor app in the in-app browser and get the result back by deep link.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "sideEffects": false,
+  "keywords": ["wulopay", "payments", "checkout", "capacitor", "ionic"],
+  "repository": { "type": "git", "url": "git+https://github.com/WuloPay/wulopay-js.git", "directory": "packages/capacitor" },
+  "homepage": "https://github.com/WuloPay/wulopay-js/tree/main/packages/capacitor",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": { "@capacitor/app": ">=8", "@capacitor/browser": ">=8", "@capacitor/core": ">=8" },
+  "devDependencies": { "@capacitor/app": "^8.1.0", "@capacitor/browser": "^8.0.0", "@capacitor/core": "^8.5.3" }
+}

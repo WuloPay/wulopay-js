@@ -1,0 +1,38 @@
+{
+  "name": "@wulopay/react-native",
+  "version": "1.0.0",
+  "description": "Open WuloPay hosted checkout from a React Native or Expo app in the system browser sheet (ASWebAuthenticationSession / Custom Tabs) and get the result back by deep link.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "wulopay",
+    "payments",
+    "checkout",
+    "react-native",
+    "expo"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WuloPay/wulopay-js.git",
+    "directory": "packages/react-native"
+  },
+  "homepage": "https://github.com/WuloPay/wulopay-js/tree/main/packages/react-native",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}
