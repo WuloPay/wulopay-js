@@ -4,7 +4,8 @@ export { parseCheckoutReturn, WULOPAY_PAGE_HOSTS } from './result.js'
 export type { CheckoutResult } from './result.js'
 
 /** Same shape as Expo's `WebBrowser.openAuthSessionAsync` (and compatible auth-session helpers). */
-export type OpenAuthSession = (url: string, redirectUrl: string) => Promise<{ type: string; url?: string }>
+export type OpenAuthSession = (url: string, redirectUrl: string, options?: { preferEphemeralSession?: boolean }) =>
+  Promise<{ type: string; url?: string }>
 
 export interface OpenCheckoutOptions {
   /** The session `url` your backend got from WuloPay (never create sessions in the app). */
@@ -26,7 +27,8 @@ export interface OpenCheckoutOptions {
  */
 export async function openCheckout({ url, returnUrl, openAuthSession, allowedHosts }: OpenCheckoutOptions): Promise<CheckoutResult> {
   assertCheckoutUrl(url, allowedHosts)
-  const result = await openAuthSession(url, returnUrl)
+  // No shared cookies needed for a checkout; on iOS this also skips the "wants to use … to sign in" prompt.
+  const result = await openAuthSession(url, returnUrl, { preferEphemeralSession: true })
   if (result.type === 'success' && result.url) return parseCheckoutReturn(result.url)
   if (result.type === 'cancel' || result.type === 'dismiss') return { status: 'dismissed', sessionId: null }
   return { status: 'unknown', sessionId: null }

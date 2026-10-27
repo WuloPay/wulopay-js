@@ -7,7 +7,7 @@ describe('@wulopay/react-native', () => {
   it('opens the auth session with the return URL and reads the result', async () => {
     const open = vi.fn().mockResolvedValue({ type: 'success', url: 'myshop://checkout?session_id=cs_7CRIaOqGBtDY1J7ARiDLS7&status=paid' })
     expect(await openCheckout({ url, returnUrl: 'myshop://checkout', openAuthSession: open })).toEqual({ status: 'paid', sessionId: 'cs_7CRIaOqGBtDY1J7ARiDLS7' })
-    expect(open).toHaveBeenCalledWith(url, 'myshop://checkout')
+    expect(open).toHaveBeenCalledWith(url, 'myshop://checkout', { preferEphemeralSession: true })
   })
 
   it('reports a closed sheet as dismissed', async () => {
