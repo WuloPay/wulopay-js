@@ -4,7 +4,7 @@ Take card payments on WuloPay's secure payment page from Node.js, React, React N
 
 | Package | npm | Install | Use it in |
 |---|---|---|---|
-| [`@wulopay/node`](packages/node) | [![npm](https://img.shields.io/npm/v/@wulopay/node)](https://www.npmjs.com/package/@wulopay/node) | `npm install @wulopay/node` | Your server (Node.js 22.12+): sessions, refunds, webhooks |
+| [`@wulopay/node`](packages/node) | [![npm](https://img.shields.io/npm/v/@wulopay/node)](https://www.npmjs.com/package/@wulopay/node) | `npm install @wulopay/node` | Your server (Node.js 22.12+): sessions, subscriptions, refunds, webhooks |
 | [`@wulopay/react`](packages/react) | [![npm](https://img.shields.io/npm/v/@wulopay/react)](https://www.npmjs.com/package/@wulopay/react) | `npm install @wulopay/react` | React web apps (18+): a "Pay" button / hook |
 | [`@wulopay/react-native`](packages/react-native) | [![npm](https://img.shields.io/npm/v/@wulopay/react-native)](https://www.npmjs.com/package/@wulopay/react-native) | `npm install @wulopay/react-native` | React Native / Expo apps |
 | [`@wulopay/capacitor`](packages/capacitor) | [![npm](https://img.shields.io/npm/v/@wulopay/capacitor)](https://www.npmjs.com/package/@wulopay/capacitor) | `npm install @wulopay/capacitor` | Capacitor 8 / Ionic apps |
@@ -30,6 +30,10 @@ back to returnUrl (web page or app deep link) with ?session_id=…&status=…
 
 Sandbox base URL `https://sandbox.wulopay.com/api/v1`; test cards and the full API are in
 [wulopay-openapi](https://github.com/WuloPay/wulopay-openapi). Developer sandbox keys: email api@wulopay.com.
+
+**Subscriptions** work with the same front-end packages: your server creates a sign-up session (`mode: 'subscription'`)
+or a card-update session with `@wulopay/node`, and the React, React Native and Capacitor packages open its `url` exactly
+like a payment session. See [packages/node](packages/node#subscriptions).
 
 ## Develop
 
