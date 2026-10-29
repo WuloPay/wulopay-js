@@ -3,9 +3,12 @@ import {
   ApiConnectionError, AuthenticationError, ConflictError, InvalidRequestError, NotFoundError,
   PermissionError, RateLimitError, WuloPayError,
 } from './errors.js'
-import type { CheckoutSession, CreateCheckoutSessionParams, Refund, TokenCache } from './types.js'
+import type {
+  CardUpdateSession, CheckoutSession, CreateCheckoutSessionParams, CreatePlanParams, ManageLink, Plan, Refund, Subscription,
+  SubscriptionCharge, SubscriptionStatus, TokenCache,
+} from './types.js'
 
-export const VERSION = '1.0.0'
+export const VERSION = '1.1.0'
 export const SANDBOX_BASE_URL = 'https://sandbox.wulopay.com/api/v1'
 
 export interface WuloPayOptions {
@@ -31,6 +34,8 @@ interface RawResponse { status: number; headers: Headers; body: string }
  */
 export class WuloPay {
   readonly checkoutSessions: CheckoutSessions
+  readonly plans: Plans
+  readonly subscriptions: Subscriptions
   private readonly keyId: string
   private readonly secret: string
   private readonly baseUrl: string
@@ -53,6 +58,8 @@ export class WuloPay {
     this.fetchImpl = options.fetch ?? globalThis.fetch
     if (typeof this.fetchImpl !== 'function') throw new TypeError('No fetch implementation available (Node.js 22+ has one).')
     this.checkoutSessions = new CheckoutSessions(this)
+    this.plans = new Plans(this)
+    this.subscriptions = new Subscriptions(this)
   }
 
   /** @internal Calls the API with a bearer token, refreshing it once if the API refuses it. */
@@ -162,7 +169,7 @@ export class CheckoutSessions {
 
   /** Reuse the same idempotency key when retrying the same order, so only one session is created. */
   create(params: CreateCheckoutSessionParams, options: { idempotencyKey?: string } = {}): Promise<CheckoutSession> {
-    const body = { ...params, amount: Math.round(Number(params.amount) * 100) / 100 }
+    const body = params.amount === undefined ? { ...params } : { ...params, amount: Math.round(Number(params.amount) * 100) / 100 }
     const headers: Record<string, string> = options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}
     return this.client.request<CheckoutSession>('POST', '/Checkout/Sessions', body, headers)
   }
@@ -181,5 +188,87 @@ export class CheckoutSessions {
     if (options.amount !== undefined) body.amount = Math.round(options.amount * 100) / 100
     if (options.reason) body.reason = options.reason
     return this.client.request<Refund>('POST', `/Checkout/Sessions/${encodeURIComponent(id)}/Refunds`, body)
+  }
+}
+
+/** Plans: what a subscription charges and how often. */
+export class Plans {
+  constructor(private readonly client: WuloPay) {}
+
+  create(params: CreatePlanParams): Promise<Plan> {
+    return this.client.request<Plan>('POST', '/Billing/Plans', { ...params, amount: Math.round(Number(params.amount) * 100) / 100 })
+  }
+
+  list(): Promise<Plan[]> {
+    return this.client.request<Plan[]>('GET', '/Billing/Plans')
+  }
+
+  retrieve(id: string): Promise<Plan> {
+    return this.client.request<Plan>('GET', `/Billing/Plans/${encodeURIComponent(id)}`)
+  }
+}
+
+/**
+ * Subscriptions, created when a sign-up session (mode "subscription") is paid. In merchant billing your system calls
+ * `charge` when a renewal is due; in WuloPay billing WuloPay charges on schedule and you follow along by webhook.
+ */
+export class Subscriptions {
+  constructor(private readonly client: WuloPay) {}
+
+  list(options: { status?: SubscriptionStatus; limit?: number } = {}): Promise<{ object: 'list'; data: Subscription[] }> {
+    const q = new URLSearchParams()
+    if (options.status) q.set('status', options.status)
+    if (options.limit) q.set('limit', String(options.limit))
+    const qs = q.toString()
+    return this.client.request('GET', `/Billing/Subscriptions${qs ? `?${qs}` : ''}`)
+  }
+
+  retrieve(id: string): Promise<Subscription> {
+    return this.client.request<Subscription>('GET', `/Billing/Subscriptions/${encodeURIComponent(id)}`)
+  }
+
+  /** Now, or (WuloPay billing) at the end of the paid period. */
+  cancel(id: string, options: { atPeriodEnd?: boolean } = {}): Promise<Subscription> {
+    return this.client.request<Subscription>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/Cancel`, { atPeriodEnd: options.atPeriodEnd === true })
+  }
+
+  /** WuloPay billing: stop charging until resumed (missed periods are skipped). */
+  pause(id: string): Promise<Subscription> {
+    return this.client.request<Subscription>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/Pause`, {})
+  }
+
+  resume(id: string): Promise<Subscription> {
+    return this.client.request<Subscription>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/Resume`, {})
+  }
+
+  /**
+   * Merchant billing: charge the stored card now. `idempotencyKey` is required (e.g. your renewal order id): a retry with
+   * the same key returns the same charge and never charges twice. A declined charge resolves with `status: "failed"`.
+   */
+  charge(id: string, options: { idempotencyKey: string; amount?: number }): Promise<SubscriptionCharge> {
+    if (!options?.idempotencyKey) throw new TypeError('idempotencyKey is required (e.g. your renewal order id).')
+    const body = options.amount === undefined ? {} : { amount: Math.round(options.amount * 100) / 100 }
+    return this.client.request<SubscriptionCharge>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/Charges`, body,
+      { 'Idempotency-Key': options.idempotencyKey })
+  }
+
+  /** Charge history, newest first (cycle 1 is the sign-up payment). */
+  charges(id: string): Promise<SubscriptionCharge[]> {
+    return this.client.request<SubscriptionCharge[]>('GET', `/Billing/Subscriptions/${encodeURIComponent(id)}/Charges`)
+  }
+
+  /** A payment-page link where the shopper replaces the card (3-D Secure; nothing is charged). */
+  createCardUpdateSession(id: string, options: { returnUrl: string }): Promise<CardUpdateSession> {
+    return this.client.request<CardUpdateSession>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/CardUpdateSession`, { returnUrl: options.returnUrl })
+  }
+
+  /** A fresh link to the shopper's own subscription page. The previous link stops working. */
+  createManageLink(id: string): Promise<ManageLink> {
+    return this.client.request<ManageLink>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/ManageLink`, {})
+  }
+
+  /** Sandbox only: make the next scheduled charge (or the end of the trial) due now and run it. */
+  advance(id: string): Promise<Subscription> {
+    return this.client.request<Subscription>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/Advance`, {})
   }
 }
