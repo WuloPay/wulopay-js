@@ -26,6 +26,9 @@ export interface CreateCheckoutSessionParams {
     billingMode?: BillingMode
     /** Merchant billing: the most one later charge may be (shown to the shopper). Default: the plan amount. */
     maxAmount?: number
+    /** Merchant billing: what the shopper pays today when it differs from the plan amount (sign-up fee, part period);
+     *  0 checks and stores the card without charging. Not with a plan that has trialDays. */
+    firstAmount?: number
   }
 }
 
@@ -57,7 +60,7 @@ export interface CheckoutSession {
 }
 
 export type BillingMode = 'wulopay' | 'merchant'
-export type PlanInterval = 'week' | 'month' | 'year'
+export type PlanInterval = 'day' | 'week' | 'month' | 'year'
 
 export interface CreatePlanParams {
   /** Shown to the shopper (max 120). */
@@ -65,7 +68,7 @@ export interface CreatePlanParams {
   amount: number
   currency?: Currency
   interval: PlanInterval
-  /** Charge every N intervals (1 to 12, default 1). */
+  /** Charge every N intervals (1 to 12, or 1 to 365 for days; default 1). */
   intervalCount?: number
   /** Number of charges including the first; null or left out = until cancelled. */
   cycles?: number | null
