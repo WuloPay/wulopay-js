@@ -100,3 +100,42 @@ describe('WuloPay client', () => {
     expect(() => new WuloPay({ keyId: 'k', secret: 's', baseUrl: 'http://example.com' })).toThrow(TypeError)
   })
 })
+
+describe('subscriptions', () => {
+  it('creates a plan and a subscription sign-up session without an amount', async () => {
+    const f = fakeFetch([token(), [201, { id: 'plan_1', object: 'plan' }], [201, { id: 'cs_1', mode: 'subscription' }]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    const plan = await wulopay.plans.create({ name: 'Gold', amount: 49.004, interval: 'month', trialDays: 14 })
+    expect(f.calls[1].url).toBe('https://sandbox.wulopay.com/api/v1/Billing/Plans')
+    expect(json(f.calls[1])).toEqual({ name: 'Gold', amount: 49, interval: 'month', trialDays: 14 })
+    await wulopay.checkoutSessions.create({ mode: 'subscription', subscription: { planId: plan.id, billingMode: 'wulopay' }, reference: 'SUB-1',
+      customer: { email: 'a@example.com' }, returnUrl: 'https://shop.example/r' })
+    expect(json(f.calls[2])).not.toHaveProperty('amount')
+    expect(json(f.calls[2]).subscription).toEqual({ planId: 'plan_1', billingMode: 'wulopay' })
+  })
+
+  it('charges with the required idempotency key and returns a declined charge', async () => {
+    const f = fakeFetch([token(), [200, { id: 'ch_2', status: 'failed', retryAllowed: false, failureMessage: 'The card was declined.' }]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    const charge = await wulopay.subscriptions.charge('sub_1', { idempotencyKey: 'renewal-1043', amount: 55 })
+    expect(f.calls[1].url).toBe('https://sandbox.wulopay.com/api/v1/Billing/Subscriptions/sub_1/Charges')
+    expect(header(f.calls[1], 'Idempotency-Key')).toBe('renewal-1043')
+    expect(json(f.calls[1])).toEqual({ amount: 55 })
+    expect(charge.retryAllowed).toBe(false)
+    expect(() => wulopay.subscriptions.charge('sub_1', { idempotencyKey: '' })).toThrow(/idempotencyKey/)
+  })
+
+  it('cancels at period end, lists by status, and creates card-update and manage links', async () => {
+    const f = fakeFetch([token(), [200, { id: 'sub_1', cancelAtPeriodEnd: true }], [200, { object: 'list', data: [] }],
+      [201, { url: 'https://pay-sandbox.wulopay.com/c/cs_9' }], [200, { url: 'https://pay-sandbox.wulopay.com/m/t' }]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    await wulopay.subscriptions.cancel('sub_1', { atPeriodEnd: true })
+    expect(json(f.calls[1])).toEqual({ atPeriodEnd: true })
+    await wulopay.subscriptions.list({ status: 'past_due', limit: 10 })
+    expect(f.calls[2].url).toBe('https://sandbox.wulopay.com/api/v1/Billing/Subscriptions?status=past_due&limit=10')
+    await wulopay.subscriptions.createCardUpdateSession('sub_1', { returnUrl: 'https://shop.example/account' })
+    expect(f.calls[3].url).toBe('https://sandbox.wulopay.com/api/v1/Billing/Subscriptions/sub_1/CardUpdateSession')
+    const link = await wulopay.subscriptions.createManageLink('sub_1')
+    expect(link.url).toContain('/m/')
+  })
+})

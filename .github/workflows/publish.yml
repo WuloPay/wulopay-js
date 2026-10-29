@@ -21,6 +21,18 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run typecheck && npm test && npm run build
-      - run: npm publish --workspaces --access public --provenance
+      # Each package has its own version: publish only those whose version is not on npm yet (npm refuses to publish
+      # over an existing version, so publishing every workspace fails as soon as one package is unchanged).
+      - name: Publish new package versions
+        run: |
+          for dir in packages/*/; do
+            name=$(node -p "require('./${dir}package.json').name")
+            version=$(node -p "require('./${dir}package.json').version")
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "skip ${name}@${version} (already published)"
+            else
+              npm publish --workspace "${dir%/}" --access public --provenance
+            fi
+          done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
