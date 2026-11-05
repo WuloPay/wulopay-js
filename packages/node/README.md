@@ -1,6 +1,6 @@
 # @wulopay/node
 
-WuloPay server library for Node.js 22.12+: hosted checkout sessions, subscriptions, refunds and signed webhooks. No dependencies.
+WuloPay server library for Node.js 22.12+: hosted checkout sessions, subscriptions, invoices, payment links, refunds and signed webhooks. No dependencies.
 
 ```
 npm install @wulopay/node
@@ -86,6 +86,27 @@ The same idempotency key never charges twice. Other calls: `subscriptions.list({
 `cancel(id, { atPeriodEnd })`, `pause`, `resume`, `charges(id)`, `createManageLink(id)` (a link to the shopper's own
 subscription page, e.g. for your "My account" page). In the sandbox, `subscriptions.advance(id)` makes the next scheduled
 charge happen now, and a plan of R 60.00 always declines, so you can test failures and retries.
+
+## Invoices and payment links
+
+```ts
+// WuloPay works out the tax and total from the lines (here R1,250 + 15% VAT = R1,437.50) and e-mails the customer.
+const invoice = await wulopay.invoices.create({
+  reference: 'INV-2026-0042',
+  customer: { name: 'Jane Doe', email: 'jane@example.com' },
+  lineItems: [{ name: 'Website design', unitPrice: 1250, taxRate: 15 }],
+  dueDate: '2026-11-30',
+}, { idempotencyKey: 'INV-2026-0042' })
+// invoice.amount === 1437.5, invoice.url is the customer's payment page; listen for the invoice.paid webhook.
+
+// A link you share yourself; maxPayments: 1 makes it single use.
+const link = await wulopay.paymentLinks.create({ description: 'Workshop ticket', amount: 150, maxPayments: 40 })
+```
+
+Prices exclude tax unless `pricesIncludeTax: true`; `shipping` and `discount` are optional. Other calls:
+`invoices.list({ status })`, `retrieve`, `send` (resend the e-mail), `cancel`; `paymentLinks.list`, `retrieve`
+(`timesPaid`, `amountCollected`), `cancel`. Webhooks: `invoice.paid`, `invoice.expired`, `payment_link.paid`.
+Scopes: `invoices.create` for invoices, `links.purchase.create` for links.
 
 ## Refunds, cancelling, errors
 
