@@ -139,3 +139,58 @@ describe('subscriptions', () => {
     expect(link.url).toContain('/m/')
   })
 })
+
+describe('invoices and payment links', () => {
+  it('creates an invoice with lines, an idempotency key and amounts rounded to cents', async () => {
+    const f = fakeFetch([token(), [201, { id: 'inv_1', object: 'invoice', status: 'open', amount: 1437.5, tax: 187.5 }]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    const inv = await wulopay.invoices.create({
+      customer: { name: 'Jane Doe', email: 'jane@example.com' },
+      lineItems: [{ name: 'Website design', quantity: 1, unitPrice: 1250.004, taxRate: 15, discount: 0.005 }],
+      shipping: { amount: 99.999, taxRate: 15 }, discount: 10.001, dueDate: '2026-11-30', send: false,
+    }, { idempotencyKey: 'INV-0042' })
+    expect(inv.amount).toBe(1437.5)
+    expect(f.calls[1].url).toBe('https://sandbox.wulopay.com/api/v1/Invoices')
+    expect(f.calls[1].init.method).toBe('POST')
+    expect(header(f.calls[1], 'Idempotency-Key')).toBe('INV-0042')
+    const body = json(f.calls[1])
+    expect(body.lineItems[0]).toEqual({ name: 'Website design', quantity: 1, unitPrice: 1250, taxRate: 15, discount: 0.01 })
+    expect(body.shipping).toEqual({ amount: 100, taxRate: 15 })
+    expect(body.discount).toBe(10)
+    expect(body.send).toBe(false)
+    expect('amount' in body).toBe(false)
+  })
+
+  it('lists, retrieves, sends and cancels invoices', async () => {
+    const f = fakeFetch([token(), [200, { object: 'list', data: [{ id: 'inv_1' }] }], [200, { id: 'inv/1' }], [200, { id: 'inv_1', sentAt: 'x' }], [200, { id: 'inv_1', status: 'cancelled' }]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    expect((await wulopay.invoices.list({ status: 'open', limit: 10 })).data).toHaveLength(1)
+    await wulopay.invoices.retrieve('inv/1')
+    await wulopay.invoices.send('inv_1')
+    expect((await wulopay.invoices.cancel('inv_1')).status).toBe('cancelled')
+    expect(f.calls[1].url).toBe('https://sandbox.wulopay.com/api/v1/Invoices?status=open&limit=10')
+    expect(f.calls[2].url).toBe('https://sandbox.wulopay.com/api/v1/Invoices/inv%2F1')
+    expect([f.calls[3].init.method, f.calls[3].url.endsWith('/Invoices/inv_1/Send')]).toEqual(['POST', true])
+    expect(f.calls[4].url.endsWith('/Invoices/inv_1/Cancel')).toBe(true)
+  })
+
+  it('creates, lists, retrieves and cancels payment links', async () => {
+    const f = fakeFetch([token(), [201, { id: 'plink_1', object: 'payment_link', status: 'active' }], [200, { object: 'list', data: [] }], [200, { id: 'plink_1', timesPaid: 2, amountCollected: 300 }], [200, { id: 'plink_1', status: 'cancelled' }]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    await wulopay.paymentLinks.create({ description: 'Workshop ticket', amount: 149.999, maxPayments: 40 })
+    expect(json(f.calls[1])).toEqual({ description: 'Workshop ticket', amount: 150, maxPayments: 40 })
+    await wulopay.paymentLinks.list({ status: 'completed' })
+    expect(f.calls[2].url).toBe('https://sandbox.wulopay.com/api/v1/PaymentLinks?status=completed')
+    expect((await wulopay.paymentLinks.retrieve('plink_1')).amountCollected).toBe(300)
+    expect((await wulopay.paymentLinks.cancel('plink_1')).status).toBe('cancelled')
+    expect(f.calls[4].url.endsWith('/PaymentLinks/plink_1/Cancel')).toBe(true)
+  })
+
+  it('reports totals that disagree as InvalidRequestError, and missing scope as PermissionError', async () => {
+    const f = fakeFetch([token(), [400, { error: "amount 1250.00 doesn't match the line items: 1437.50." }], [403, {}]])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    await expect(wulopay.invoices.create({ customer: { name: 'A', email: 'a@example.com' }, amount: 1250, lineItems: [{ name: 'x', unitPrice: 1250, taxRate: 15 }] }))
+      .rejects.toBeInstanceOf(InvalidRequestError)
+    await expect(wulopay.paymentLinks.list()).rejects.toBeInstanceOf(PermissionError)
+  })
+})
