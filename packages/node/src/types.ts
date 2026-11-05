@@ -57,6 +57,10 @@ export interface CheckoutSession {
   mode: 'payment' | 'subscription'
   /** Subscription mode only; `subscriptionId` is set once the sign-up is paid. */
   subscription?: { planId: string; billingMode: BillingMode; maxAmount?: number | null; subscriptionId?: string | null } | null
+  /** Set when the session pays an invoice. */
+  invoiceId?: string | null
+  /** Set when the session pays a payment link. */
+  paymentLinkId?: string | null
 }
 
 export type BillingMode = 'wulopay' | 'merchant'
@@ -159,6 +163,144 @@ export interface ManageLink {
   expiresAt: string
 }
 
+// ---- invoices and payment links (API v1.2.0)
+
+/** A line on an invoice or payment link. WuloPay works out its tax and total. */
+export interface LineItemParams {
+  name: string
+  sku?: string
+  description?: string
+  /** Default 1. */
+  quantity?: number
+  /** One unit, excluding tax unless `pricesIncludeTax`. */
+  unitPrice: number
+  /** Percent, e.g. 15 for VAT. Ignored when `taxAmount` is given. */
+  taxRate?: number
+  /** The line's tax as an amount, instead of a rate. */
+  taxAmount?: number
+  /** An amount off this line. */
+  discount?: number
+}
+
+export interface LineItem {
+  name: string
+  sku?: string | null
+  description?: string | null
+  quantity: number
+  unitPrice: number
+  discount: number
+  taxRate?: number | null
+  tax: number
+  /** What the line adds to the total, tax included. */
+  total: number
+}
+
+/** A payment made through an invoice or link: its checkout session (refund with `checkoutSessions.refund`). */
+export interface LinkPayment {
+  sessionId: string
+  amount: number
+  cardBrand?: string | null
+  last4?: string | null
+  paidAt?: string | null
+  amountRefunded: number
+}
+
+export interface CreateInvoiceParams {
+  /** Your invoice number; default INV-yyMMdd-XXXXXX. */
+  reference?: string
+  description?: string
+  currency?: Currency
+  customer: { name: string; email: string; id?: string; company?: string }
+  /** Recommended: WuloPay works out the tax and total from the lines. */
+  lineItems?: LineItemParams[]
+  pricesIncludeTax?: boolean
+  shipping?: { amount: number; taxRate?: number }
+  /** An amount off the invoice total. */
+  discount?: number
+  /** Optional with lineItems (checked against WuloPay's total); required without them. */
+  amount?: number
+  /** yyyy-MM-dd, shown to the customer. */
+  dueDate?: string
+  /** yyyy-MM-dd: payable until the end of this day (South African time). Default 30 days after dueDate or today. */
+  expiresOn?: string
+  /** E-mail the invoice to the customer now (default true). */
+  send?: boolean
+  metadata?: Record<string, string>
+}
+
+export type InvoiceStatus = 'open' | 'paid' | 'cancelled' | 'expired'
+
+export interface Invoice {
+  id: string
+  object: 'invoice'
+  environment: 'sandbox' | 'live'
+  /** The customer's payment page. */
+  url: string
+  status: InvoiceStatus
+  reference: string
+  description?: string | null
+  currency: string
+  customer: { name: string; email: string; id?: string | null; company?: string | null }
+  lineItems: LineItem[]
+  subtotal?: number | null
+  tax?: number | null
+  shipping?: number | null
+  discount?: number | null
+  /** Amount due. */
+  amount: number
+  amountPaid: number
+  dueDate?: string | null
+  expiresAt?: string | null
+  sentAt?: string | null
+  paidAt?: string | null
+  cancelledAt?: string | null
+  payment?: LinkPayment | null
+  metadata: Record<string, string>
+  createdAt: string
+}
+
+export interface CreatePaymentLinkParams {
+  /** Your reference; default LINK-yyMMdd-XXXXXX. */
+  reference?: string
+  description?: string
+  currency?: Currency
+  /** The price; or give lineItems and WuloPay adds them up (both: they must agree). */
+  amount?: number
+  lineItems?: LineItemParams[]
+  pricesIncludeTax?: boolean
+  /** ISO 8601 date-time. */
+  expiresAt?: string
+  /** Stop after this many payments (1 = single use). */
+  maxPayments?: number
+  metadata?: Record<string, string>
+}
+
+export type PaymentLinkStatus = 'active' | 'completed' | 'cancelled' | 'expired'
+
+export interface PaymentLink {
+  id: string
+  object: 'payment_link'
+  environment: 'sandbox' | 'live'
+  url: string
+  /** completed = maxPayments reached. */
+  status: PaymentLinkStatus
+  reference: string
+  description?: string | null
+  currency: string
+  amount: number
+  lineItems: LineItem[]
+  maxPayments?: number | null
+  timesPaid: number
+  amountCollected: number
+  lastPaidAt?: string | null
+  expiresAt?: string | null
+  cancelledAt?: string | null
+  /** Only in the payment_link.paid webhook: the payment that triggered it. */
+  payment?: LinkPayment | null
+  metadata: Record<string, string>
+  createdAt: string
+}
+
 export interface Refund {
   sessionId: string
   refundedThisTime: number
@@ -183,6 +325,9 @@ export type WebhookEventType =
   | 'subscription.cancel_scheduled'
   | 'subscription.cancelled'
   | 'subscription.completed'
+  | 'invoice.paid'
+  | 'invoice.expired'
+  | 'payment_link.paid'
   | 'webhook.test'
 
 export interface WebhookEvent<T = unknown> {
