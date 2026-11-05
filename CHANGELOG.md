@@ -1,5 +1,12 @@
 # Changelog
 
+## @wulopay/node 1.2.0
+- Invoices (`invoices`: create with idempotency key, list, retrieve, send, cancel) and payment links (`paymentLinks`:
+  create, list, retrieve, cancel), for API v1.2.0. WuloPay works out invoice totals from the lines; amounts are rounded
+  to cents before sending. Types for `invoice.paid`, `invoice.expired` and `payment_link.paid`, and `invoiceId` /
+  `paymentLinkId` on checkout sessions. Tested live against the sandbox.
+- The other packages are unchanged (1.0.0).
+
 ## @wulopay/node 1.1.0
 - Subscriptions: `plans` (create, list, retrieve); sign-up sessions with `mode: 'subscription'`; `subscriptions` (list,
   retrieve, cancel, pause, resume, charge with a required idempotency key, charges, card-update sessions, manage links,
