@@ -1,4 +1,4 @@
-export { WuloPay, CheckoutSessions, Plans, Subscriptions, SANDBOX_BASE_URL, VERSION } from './client.js'
+export { WuloPay, CheckoutSessions, Invoices, PaymentLinks, Plans, Subscriptions, SANDBOX_BASE_URL, VERSION } from './client.js'
 export type { WuloPayOptions } from './client.js'
 export { constructEvent, verifySignature, DEFAULT_TOLERANCE_SECONDS } from './webhooks.js'
 export * from './errors.js'

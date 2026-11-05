@@ -4,11 +4,12 @@ import {
   PermissionError, RateLimitError, WuloPayError,
 } from './errors.js'
 import type {
-  CardUpdateSession, CheckoutSession, CreateCheckoutSessionParams, CreatePlanParams, ManageLink, Plan, Refund, Subscription,
+  CardUpdateSession, CheckoutSession, CreateCheckoutSessionParams, CreateInvoiceParams, CreatePaymentLinkParams, CreatePlanParams,
+  Invoice, InvoiceStatus, LineItemParams, ManageLink, PaymentLink, PaymentLinkStatus, Plan, Refund, Subscription,
   SubscriptionCharge, SubscriptionStatus, TokenCache,
 } from './types.js'
 
-export const VERSION = '1.1.0'
+export const VERSION = '1.2.0'
 export const SANDBOX_BASE_URL = 'https://sandbox.wulopay.com/api/v1'
 
 export interface WuloPayOptions {
@@ -36,6 +37,8 @@ export class WuloPay {
   readonly checkoutSessions: CheckoutSessions
   readonly plans: Plans
   readonly subscriptions: Subscriptions
+  readonly invoices: Invoices
+  readonly paymentLinks: PaymentLinks
   private readonly keyId: string
   private readonly secret: string
   private readonly baseUrl: string
@@ -60,6 +63,8 @@ export class WuloPay {
     this.checkoutSessions = new CheckoutSessions(this)
     this.plans = new Plans(this)
     this.subscriptions = new Subscriptions(this)
+    this.invoices = new Invoices(this)
+    this.paymentLinks = new PaymentLinks(this)
   }
 
   /** @internal Calls the API with a bearer token, refreshing it once if the API refuses it. */
@@ -270,5 +275,79 @@ export class Subscriptions {
   /** Sandbox only: make the next scheduled charge (or the end of the trial) due now and run it. */
   advance(id: string): Promise<Subscription> {
     return this.client.request<Subscription>('POST', `/Billing/Subscriptions/${encodeURIComponent(id)}/Advance`, {})
+  }
+}
+
+const cents = (n: number) => Math.round(Number(n) * 100) / 100
+const idem = (key?: string): Record<string, string> => (key ? { 'Idempotency-Key': key } : {})
+const query = (o: { status?: string; limit?: number }) => {
+  const q = new URLSearchParams()
+  if (o.status) q.set('status', o.status)
+  if (o.limit) q.set('limit', String(o.limit))
+  const s = q.toString()
+  return s ? `?${s}` : ''
+}
+const lines = (items?: LineItemParams[]) => items?.map((i) => ({
+  ...i, unitPrice: cents(i.unitPrice),
+  ...(i.taxAmount !== undefined ? { taxAmount: cents(i.taxAmount) } : {}),
+  ...(i.discount !== undefined ? { discount: cents(i.discount) } : {}),
+}))
+
+/**
+ * Invoices: e-mailed to your customer and paid once on WuloPay's page. WuloPay works out the tax and total from the
+ * lines; you hear about payment by the `invoice.paid` webhook. Needs scope `invoices.create`.
+ */
+export class Invoices {
+  constructor(private readonly client: WuloPay) {}
+
+  /** Reuse the same idempotency key when retrying, so only one invoice is created (and e-mailed). */
+  create(params: CreateInvoiceParams, options: { idempotencyKey?: string } = {}): Promise<Invoice> {
+    const body: Record<string, unknown> = { ...params, lineItems: lines(params.lineItems) }
+    if (params.amount !== undefined) body.amount = cents(params.amount)
+    if (params.discount !== undefined) body.discount = cents(params.discount)
+    if (params.shipping) body.shipping = { ...params.shipping, amount: cents(params.shipping.amount) }
+    return this.client.request<Invoice>('POST', '/Invoices', body, idem(options.idempotencyKey))
+  }
+
+  list(options: { status?: InvoiceStatus; limit?: number } = {}): Promise<{ object: 'list'; data: Invoice[] }> {
+    return this.client.request('GET', `/Invoices${query(options)}`)
+  }
+
+  retrieve(id: string): Promise<Invoice> {
+    return this.client.request<Invoice>('GET', `/Invoices/${encodeURIComponent(id)}`)
+  }
+
+  /** (Re)send the invoice e-mail. Open invoices only. */
+  send(id: string): Promise<Invoice> {
+    return this.client.request<Invoice>('POST', `/Invoices/${encodeURIComponent(id)}/Send`)
+  }
+
+  /** Cancel an unpaid invoice (a paid one is refunded instead, on its checkout session). */
+  cancel(id: string): Promise<Invoice> {
+    return this.client.request<Invoice>('POST', `/Invoices/${encodeURIComponent(id)}/Cancel`)
+  }
+}
+
+/** Payment links: a page you share, paid as often as you allow (`maxPayments`). Needs scope `links.purchase.create`. */
+export class PaymentLinks {
+  constructor(private readonly client: WuloPay) {}
+
+  create(params: CreatePaymentLinkParams, options: { idempotencyKey?: string } = {}): Promise<PaymentLink> {
+    const body: Record<string, unknown> = { ...params, lineItems: lines(params.lineItems) }
+    if (params.amount !== undefined) body.amount = cents(params.amount)
+    return this.client.request<PaymentLink>('POST', '/PaymentLinks', body, idem(options.idempotencyKey))
+  }
+
+  list(options: { status?: PaymentLinkStatus; limit?: number } = {}): Promise<{ object: 'list'; data: PaymentLink[] }> {
+    return this.client.request('GET', `/PaymentLinks${query(options)}`)
+  }
+
+  retrieve(id: string): Promise<PaymentLink> {
+    return this.client.request<PaymentLink>('GET', `/PaymentLinks/${encodeURIComponent(id)}`)
+  }
+
+  /** Stop taking payments. Payments already made stay (refund them on their checkout session). */
+  cancel(id: string): Promise<PaymentLink> {
+    return this.client.request<PaymentLink>('POST', `/PaymentLinks/${encodeURIComponent(id)}/Cancel`)
   }
 }
