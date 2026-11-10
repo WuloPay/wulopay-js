@@ -1,4 +1,8 @@
-export type Currency = 'ZAR'
+/**
+ * South African rand, Namibian dollar, Botswana pula, Lesotho loti or eSwatini lilangeni. The sandbox accepts all
+ * five; in live, currencies other than ZAR are enabled per merchant on request.
+ */
+export type Currency = 'ZAR' | 'NAD' | 'BWP' | 'LSL' | 'SZL'
 export type SessionStatus = 'open' | 'processing' | 'paid' | 'expired' | 'cancelled'
 
 export interface CreateCheckoutSessionParams {

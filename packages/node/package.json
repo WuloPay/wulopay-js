@@ -1,6 +1,6 @@
 {
   "name": "@wulopay/node",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "WuloPay server library for Node.js: hosted checkout sessions, subscriptions, invoices, payment links, refunds and signed webhooks.",
   "license": "MIT",
   "type": "module",
