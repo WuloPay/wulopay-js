@@ -1,5 +1,10 @@
 # Changelog
 
+## @wulopay/node 1.3.0
+- `Currency` also accepts `'NAD'`, `'BWP'`, `'LSL'` and `'SZL'` (Namibia, Botswana, Lesotho, eSwatini). The sandbox
+  accepts all five; in live, currencies other than ZAR are enabled per merchant on request.
+- The other packages are unchanged.
+
 ## @wulopay/node 1.2.0
 - Invoices (`invoices`: create with idempotency key, list, retrieve, send, cancel) and payment links (`paymentLinks`:
   create, list, retrieve, cancel), for API v1.2.0. WuloPay works out invoice totals from the lines; amounts are rounded
