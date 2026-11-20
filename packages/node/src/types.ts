@@ -6,9 +6,10 @@ export type Currency = 'ZAR' | 'NAD' | 'BWP' | 'LSL' | 'SZL'
 export type SessionStatus = 'open' | 'processing' | 'paid' | 'expired' | 'cancelled'
 
 export interface CreateCheckoutSessionParams {
-  /** Currency units with at most 2 decimals, e.g. 149.99. Optional in subscription mode (the plan amount is used). */
+  /** Currency units with at most 2 decimals, e.g. 149.99. Optional in subscription mode (the plan amount is used);
+   *  0 or left out in save_card mode (nothing is charged). */
   amount?: number
-  /** Optional in subscription mode (the plan currency is used). */
+  /** Optional in subscription mode (the plan currency is used) and in save_card mode (ZAR). */
   currency?: Currency
   /** Your order id (max 64 characters). */
   reference: string
@@ -21,8 +22,15 @@ export interface CreateCheckoutSessionParams {
   metadata?: Record<string, string>
   /** 5 to 1440, default 60. */
   expiresInMinutes?: number
-  /** "subscription" makes this a sign-up: the payment is the first charge (or a free trial) and the card is stored. */
-  mode?: 'payment' | 'subscription'
+  /** "subscription" makes this a sign-up: the payment is the first charge (or a free trial) and the card is stored.
+   *  "save_card" saves a card to the customer's wallet: the bank checks it and nothing is charged. */
+  mode?: 'payment' | 'subscription' | 'save_card'
+  /** Your id for the shopper (1 to 64 characters: letters, digits and . _ : @ + -). Required with save_card, saveCard or cardId. */
+  customerReference?: string
+  /** Payment mode: offer the shopper a box to save the card while paying (unticked by default). */
+  saveCard?: boolean
+  /** Payment mode: pay with this saved card; the shopper confirms on the page with 3-D Secure. */
+  cardId?: string
   /** Required in subscription mode. `customer.email` is required too. */
   subscription?: {
     planId: string
@@ -58,7 +66,13 @@ export interface CheckoutSession {
   refundedAmount: number
   lastPaymentError?: string | null
   paymentAttempts: number
-  mode: 'payment' | 'subscription'
+  mode: 'payment' | 'subscription' | 'save_card'
+  customerReference?: string | null
+  saveCard?: boolean
+  /** Set once a card was saved by this session. */
+  savedCard?: { id: string; brand?: string | null; last4?: string | null } | null
+  /** Sessions that pay with a saved card. */
+  cardId?: string | null
   /** Subscription mode only; `subscriptionId` is set once the sign-up is paid. */
   subscription?: { planId: string; billingMode: BillingMode; maxAmount?: number | null; subscriptionId?: string | null } | null
   /** Set when the session pays an invoice. */
@@ -332,6 +346,10 @@ export type WebhookEventType =
   | 'invoice.paid'
   | 'invoice.expired'
   | 'payment_link.paid'
+  | 'card.saved'
+  | 'card.removed'
+  | 'card.expiring'
+  | 'card.expired'
   | 'webhook.test'
 
 export interface WebhookEvent<T = unknown> {
@@ -340,6 +358,82 @@ export interface WebhookEvent<T = unknown> {
   createdAt: string
   environment: 'sandbox' | 'live'
   data: { object: T }
+}
+
+export type WalletCardStatus = 'active' | 'expired' | 'removed'
+
+/** A saved card. Never more than the brand, the last 4 digits and the expiry date. */
+export interface WalletCard {
+  id: string
+  brand?: string | null
+  last4?: string | null
+  expiryMonth?: number | null
+  expiryYear?: number | null
+  nickname?: string | null
+  isDefault: boolean
+  status: WalletCardStatus
+  createdAt: string
+  lastUsedAt?: string | null
+}
+
+export interface WalletCustomer {
+  customerReference: string
+  name?: string | null
+  email?: string | null
+  phone?: string | null
+  createdAt: string
+  cards: WalletCard[]
+}
+
+export interface UpsertWalletCustomerParams {
+  name?: string
+  email?: string
+  phone?: string
+}
+
+export interface UpdateWalletCardParams {
+  /** Up to 50 characters; an empty string clears it. */
+  nickname?: string
+  /** Make this the default card (only `true` is accepted). */
+  isDefault?: true
+}
+
+export interface WalletPaymentParams {
+  /** Currency units with at most 2 decimals. */
+  amount: number
+  /** Default ZAR. */
+  currency?: Currency
+  /** Your order id (max 64 characters). */
+  reference: string
+  /** Where the shopper goes after confirming: https URL or an app deep link. */
+  returnUrl: string
+  cancelUrl?: string
+  description?: string
+  metadata?: Record<string, string>
+  /** 5 to 1440, default 30. */
+  expiresInMinutes?: number
+}
+
+/** Open `url` for the shopper: WuloPay's page shows the card and they confirm with 3-D Secure. */
+export interface WalletPayment {
+  status: 'requires_action'
+  sessionId: string
+  url: string
+  expiresAt: string
+  amount: number
+  currency: string
+  reference: string
+  card?: { id: string; brand?: string | null; last4?: string | null } | null
+}
+
+/** `data.object` of card.saved, card.removed, card.expiring and card.expired. */
+export interface CardEventObject {
+  customerReference: string
+  card: WalletCard
+  /** card.saved: cards this one replaced (the same card number saved again). */
+  replaces?: string[] | null
+  /** card.removed: the card that replaced this one. */
+  replacedBy?: string | null
 }
 
 /** Optional shared token cache (e.g. Redis) so separate processes reuse one access token. */

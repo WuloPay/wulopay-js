@@ -1,5 +1,12 @@
 # Changelog
 
+## @wulopay/node 1.4.0
+- Saved cards (`wallet`): `upsertCustomer`, `retrieveCustomer`, `deleteCustomer`, `listCards`, `updateCard`,
+  `removeCard`, and `pay` (returns `requires_action` and a `url` where the shopper confirms with 3-D Secure). Checkout
+  sessions take `mode: 'save_card'`, `saveCard`, `customerReference` and `cardId`, and return `savedCard`. Types for
+  `card.saved`, `card.removed`, `card.expiring` and `card.expired`, for API v1.4.0.
+- The other packages are unchanged: they open save-card and saved-card payment session URLs like payment sessions.
+
 ## @wulopay/node 1.3.0
 - `Currency` also accepts `'NAD'`, `'BWP'`, `'LSL'` and `'SZL'` (Namibia, Botswana, Lesotho, eSwatini). The sandbox
   accepts all five; in live, currencies other than ZAR are enabled per merchant on request.
