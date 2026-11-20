@@ -12,7 +12,7 @@ function fakeFetch(responses: Array<[number, unknown, Record<string, string>?]>)
     const next = responses.shift()
     if (!next) throw new Error('no response queued for ' + url)
     const [status, body, headers] = next
-    return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers })
+    return new Response(status === 204 ? null : typeof body === 'string' ? body : JSON.stringify(body), { status, headers })
   }) as unknown as typeof fetch
   return { fn, calls }
 }
@@ -192,5 +192,34 @@ describe('invoices and payment links', () => {
     await expect(wulopay.invoices.create({ customer: { name: 'A', email: 'a@example.com' }, amount: 1250, lineItems: [{ name: 'x', unitPrice: 1250, taxRate: 15 }] }))
       .rejects.toBeInstanceOf(InvalidRequestError)
     await expect(wulopay.paymentLinks.list()).rejects.toBeInstanceOf(PermissionError)
+  })
+
+  it('saves, lists, updates, removes and pays with saved cards', async () => {
+    const card = { id: '0f0e9d1c-1111-4222-8333-944455566677', brand: 'Visa', last4: '4242', isDefault: true, status: 'active', createdAt: '2026-11-20T10:00:00Z' }
+    const f = fakeFetch([token(),
+      [201, { id: 'cs_s', mode: 'save_card', url: 'https://pay-sandbox.wulopay.com/c/cs_s' }],
+      [200, [card]],
+      [200, { ...card, nickname: 'Personal' }],
+      [201, { status: 'requires_action', sessionId: 'cs_p', url: 'https://pay-sandbox.wulopay.com/c/cs_p', amount: 150, currency: 'ZAR', reference: '1043' }],
+      [204, ''],
+      [204, ''],
+    ])
+    const wulopay = new WuloPay({ keyId: 'k', secret: 's', fetch: f.fn })
+    await wulopay.checkoutSessions.create({ mode: 'save_card', customerReference: 'customer-1042', reference: 'save-1', returnUrl: 'https://shop.example/r' })
+    expect(json(f.calls[1])).toMatchObject({ mode: 'save_card', customerReference: 'customer-1042' })
+    const cards = await wulopay.wallet.listCards('customer 1042')
+    expect(cards[0].last4).toBe('4242')
+    expect(f.calls[2].url).toBe('https://sandbox.wulopay.com/api/v1/Wallet/Customers/customer%201042/Cards')
+    await wulopay.wallet.updateCard('customer-1042', card.id, { nickname: 'Personal' })
+    expect(f.calls[3].init.method).toBe('PATCH')
+    expect(json(f.calls[3])).toEqual({ nickname: 'Personal' })
+    const payment = await wulopay.wallet.pay('customer-1042', card.id, { amount: 149.999, reference: '1043', returnUrl: 'https://shop.example/r' }, { idempotencyKey: 'order-1043' })
+    expect(payment.status).toBe('requires_action')
+    expect(f.calls[4].url).toBe(`https://sandbox.wulopay.com/api/v1/Wallet/Customers/customer-1042/Cards/${card.id}/Payments`)
+    expect(json(f.calls[4]).amount).toBe(150)
+    expect(header(f.calls[4], 'Idempotency-Key')).toBe('order-1043')
+    await expect(wulopay.wallet.removeCard('customer-1042', card.id)).resolves.toBeUndefined()
+    expect(f.calls[5].init.method).toBe('DELETE')
+    await expect(wulopay.wallet.deleteCustomer('customer-1042')).resolves.toBeUndefined()
   })
 })

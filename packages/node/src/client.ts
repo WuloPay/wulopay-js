@@ -6,10 +6,11 @@ import {
 import type {
   CardUpdateSession, CheckoutSession, CreateCheckoutSessionParams, CreateInvoiceParams, CreatePaymentLinkParams, CreatePlanParams,
   Invoice, InvoiceStatus, LineItemParams, ManageLink, PaymentLink, PaymentLinkStatus, Plan, Refund, Subscription,
-  SubscriptionCharge, SubscriptionStatus, TokenCache,
+  SubscriptionCharge, SubscriptionStatus, TokenCache, UpdateWalletCardParams, UpsertWalletCustomerParams, WalletCard,
+  WalletCustomer, WalletPayment, WalletPaymentParams,
 } from './types.js'
 
-export const VERSION = '1.3.0'
+export const VERSION = '1.4.0'
 export const SANDBOX_BASE_URL = 'https://sandbox.wulopay.com/api/v1'
 
 export interface WuloPayOptions {
@@ -39,6 +40,7 @@ export class WuloPay {
   readonly subscriptions: Subscriptions
   readonly invoices: Invoices
   readonly paymentLinks: PaymentLinks
+  readonly wallet: Wallet
   private readonly keyId: string
   private readonly secret: string
   private readonly baseUrl: string
@@ -65,6 +67,7 @@ export class WuloPay {
     this.subscriptions = new Subscriptions(this)
     this.invoices = new Invoices(this)
     this.paymentLinks = new PaymentLinks(this)
+    this.wallet = new Wallet(this)
   }
 
   /** @internal Calls the API with a bearer token, refreshing it once if the API refuses it. */
@@ -351,3 +354,53 @@ export class PaymentLinks {
     return this.client.request<PaymentLink>('POST', `/PaymentLinks/${encodeURIComponent(id)}/Cancel`)
   }
 }
+
+/**
+ * Saved cards, per shopper, named by your `customerReference`. Cards are saved on WuloPay's page (a checkout session
+ * with `mode: 'save_card'`, or `saveCard: true` while paying). Needs scopes `wallet.read` and `wallet.write`; `pay`
+ * also needs `checkout.sessions.create`.
+ */
+export class Wallet {
+  constructor(private readonly client: WuloPay) {}
+
+  /** Create the customer, or update their name, e-mail and phone. Optional: saving a card creates the customer too. */
+  upsertCustomer(customerReference: string, params: UpsertWalletCustomerParams = {}): Promise<WalletCustomer> {
+    return this.client.request<WalletCustomer>('PUT', customer(customerReference), params)
+  }
+
+  /** The customer with their saved cards. */
+  retrieveCustomer(customerReference: string): Promise<WalletCustomer> {
+    return this.client.request<WalletCustomer>('GET', customer(customerReference))
+  }
+
+  /** Delete the customer and every saved card (for example on a privacy request). */
+  async deleteCustomer(customerReference: string): Promise<void> {
+    await this.client.request('DELETE', customer(customerReference))
+  }
+
+  /** Saved cards: the default first, then the newest. */
+  listCards(customerReference: string): Promise<WalletCard[]> {
+    return this.client.request<WalletCard[]>('GET', `${customer(customerReference)}/Cards`)
+  }
+
+  /** Rename a card, or make it the default. */
+  updateCard(customerReference: string, cardId: string, params: UpdateWalletCardParams): Promise<WalletCard> {
+    return this.client.request<WalletCard>('PATCH', `${customer(customerReference)}/Cards/${encodeURIComponent(cardId)}`, params)
+  }
+
+  /** Remove a card: it can no longer be charged from this moment. */
+  async removeCard(customerReference: string, cardId: string): Promise<void> {
+    await this.client.request('DELETE', `${customer(customerReference)}/Cards/${encodeURIComponent(cardId)}`)
+  }
+
+  /**
+   * Pay with a saved card. Open the returned `url` for the shopper: WuloPay's page shows the card and they confirm with
+   * 3-D Secure. Confirm the payment from `checkout.session.completed` or `checkoutSessions.retrieve(sessionId)`.
+   */
+  pay(customerReference: string, cardId: string, params: WalletPaymentParams, options: { idempotencyKey?: string } = {}): Promise<WalletPayment> {
+    return this.client.request<WalletPayment>('POST', `${customer(customerReference)}/Cards/${encodeURIComponent(cardId)}/Payments`,
+      { ...params, amount: cents(params.amount) }, idem(options.idempotencyKey))
+  }
+}
+
+const customer = (reference: string) => `/Wallet/Customers/${encodeURIComponent(reference)}`
